@@ -352,6 +352,38 @@ export default {
     noTasks: 'No tasks yet. Add your first task above!'
   },
 
+  // Purchase Order Modal
+  purchaseOrder: {
+    createPO: 'Create PO',
+    viewPO: 'View PO',
+    createTitle: 'Create Purchase Order',
+    viewTitle: 'Purchase Order',
+    sku: 'SKU',
+    orderId: 'Order',
+    shortage: 'Shortage',
+    units: 'units',
+    supplierName: 'Supplier Name',
+    quantity: 'Quantity',
+    unitCost: 'Unit Cost (USD)',
+    totalCost: 'Total Cost',
+    expectedDelivery: 'Expected Delivery Date',
+    status: 'Status',
+    createdDate: 'Created',
+    notes: 'Notes',
+    notesPlaceholder: 'Optional notes...',
+    noNotes: 'No notes',
+    submit: 'Create Purchase Order',
+    submitting: 'Creating...',
+    loadingPO: 'Loading purchase order...',
+    loadError: 'Failed to load purchase order',
+    createError: 'Failed to create purchase order',
+    supplierRequired: 'Supplier name is required',
+    quantityInvalid: 'Quantity must be a whole number greater than 0',
+    unitCostInvalid: 'Unit cost must be greater than 0',
+    deliveryRequired: 'Expected delivery date is required',
+    notAvailable: 'N/A'
+  },
+
   // Language
   language: {
     english: 'English',

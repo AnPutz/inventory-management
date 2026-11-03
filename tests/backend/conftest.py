@@ -16,15 +16,24 @@ import mock_data
 
 
 @pytest.fixture(autouse=True)
-def reset_submitted_orders():
-    """Clear in-memory restocking orders around every test so state never leaks.
+def reset_in_memory_state():
+    """Reset every list the API writes to around each test so state never leaks.
 
-    main.py holds a reference to the same list object, so it must be cleared
-    in place; rebinding mock_data.submitted_orders would not affect the API.
+    main.py holds references to the same list objects, so they must be cleared
+    and refilled in place; rebinding the mock_data names would not affect the API.
+    purchase_orders is restored to its loaded contents (not just cleared) in case
+    purchase_orders.json ever ships with seed data.
     """
-    mock_data.submitted_orders.clear()
+    original_purchase_orders = list(mock_data.purchase_orders)
+
+    def reset():
+        mock_data.submitted_orders.clear()
+        mock_data.tasks.clear()
+        mock_data.purchase_orders[:] = original_purchase_orders
+
+    reset()
     yield
-    mock_data.submitted_orders.clear()
+    reset()
 
 
 @pytest.fixture

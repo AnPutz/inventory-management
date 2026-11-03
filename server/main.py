@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from itertools import count
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
-from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders, submitted_orders
+from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders, submitted_orders, tasks
 
 app = FastAPI(title="Factory Inventory Management System")
 
@@ -103,6 +104,8 @@ class BacklogItem(BaseModel):
     days_delayed: int
     priority: str
     has_purchase_order: Optional[bool] = False
+    # Lets the dashboard show "View PO" instead of "Create PO" after a reload.
+    purchase_order_id: Optional[str] = None
 
 class PurchaseOrder(BaseModel):
     id: str
@@ -117,11 +120,25 @@ class PurchaseOrder(BaseModel):
 
 class CreatePurchaseOrderRequest(BaseModel):
     backlog_item_id: str
-    supplier_name: str
-    quantity: int
-    unit_cost: float
-    expected_delivery_date: str
-    notes: Optional[str] = None
+    supplier_name: str = Field(min_length=1, max_length=200)
+    quantity: int = Field(gt=0)
+    unit_cost: float = Field(gt=0)
+    # Parsed as a real date so malformed strings are rejected with 422.
+    expected_delivery_date: date
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+class Task(BaseModel):
+    id: str
+    title: str
+    priority: str
+    # camelCase to match the shape the frontend TasksModal already uses.
+    dueDate: str
+    status: str
+
+class CreateTaskRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    priority: Literal["high", "medium", "low"] = "medium"
+    dueDate: date
 
 class RestockItem(BaseModel):
     sku: str
@@ -203,8 +220,9 @@ def get_backlog():
     for item in backlog_items:
         item_dict = dict(item)
         # Check if this backlog item has a purchase order
-        has_po = any(po["backlog_item_id"] == item["id"] for po in purchase_orders)
-        item_dict["has_purchase_order"] = has_po
+        po = next((po for po in purchase_orders if po["backlog_item_id"] == item["id"]), None)
+        item_dict["has_purchase_order"] = po is not None
+        item_dict["purchase_order_id"] = po["id"] if po else None
         result.append(item_dict)
     return result
 
@@ -392,6 +410,91 @@ def create_restocking_order(request: CreateRestockOrderRequest):
     }
     submitted_orders.append(order)
     return order
+
+@app.post("/api/purchase-orders", response_model=PurchaseOrder, status_code=201)
+def create_purchase_order(request: CreatePurchaseOrderRequest):
+    """Create a purchase order for a backlog (shortage) item. One PO per backlog item."""
+    if not any(item["id"] == request.backlog_item_id for item in backlog_items):
+        raise HTTPException(status_code=404, detail=f"Backlog item {request.backlog_item_id} not found")
+    if any(po["backlog_item_id"] == request.backlog_item_id for po in purchase_orders):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Backlog item {request.backlog_item_id} already has a purchase order",
+        )
+
+    # min_length=1 still accepts "   ", so check the stripped value too.
+    supplier_name = request.supplier_name.strip()
+    if not supplier_name:
+        raise HTTPException(status_code=400, detail="Supplier name must not be blank")
+
+    # POs are never deleted, so the list length gives a unique, increasing sequence.
+    sequence = len(purchase_orders) + 1
+    po = {
+        "id": f"PO-{sequence:04d}",
+        "backlog_item_id": request.backlog_item_id,
+        "supplier_name": supplier_name,
+        "quantity": request.quantity,
+        "unit_cost": request.unit_cost,
+        "expected_delivery_date": request.expected_delivery_date.isoformat(),
+        "status": "Pending",
+        "created_date": datetime.now().replace(microsecond=0).isoformat(),
+        "notes": request.notes,
+    }
+    purchase_orders.append(po)
+    return po
+
+@app.get("/api/purchase-orders/{backlog_item_id}", response_model=PurchaseOrder)
+def get_purchase_order_by_backlog_item(backlog_item_id: str):
+    """Get the purchase order created for a backlog item."""
+    po = next((po for po in purchase_orders if po["backlog_item_id"] == backlog_item_id), None)
+    if not po:
+        raise HTTPException(status_code=404, detail=f"Purchase order for backlog item {backlog_item_id} not found")
+    return po
+
+# Task ids come from a counter rather than len(tasks): tasks can be deleted, and
+# reusing a deleted task's id would make the frontend update the wrong row.
+_task_ids = count(1)
+
+def _find_task(task_id: str) -> dict:
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
+
+@app.get("/api/tasks", response_model=List[Task])
+def get_tasks():
+    """Get tasks created through the API, newest first."""
+    # New tasks are appended, so reversing gives newest first (the UI inserts new ones at the top).
+    return list(reversed(tasks))
+
+@app.post("/api/tasks", response_model=Task, status_code=201)
+def create_task(request: CreateTaskRequest):
+    """Create a task."""
+    # min_length=1 still accepts "   ", so check the stripped value too.
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Task title must not be blank")
+    task = {
+        "id": f"task-{next(_task_ids)}",
+        "title": title,
+        "priority": request.priority,
+        "dueDate": request.dueDate.isoformat(),
+        "status": "pending",
+    }
+    tasks.append(task)
+    return task
+
+@app.patch("/api/tasks/{task_id}", response_model=Task)
+def toggle_task(task_id: str):
+    """Toggle a task between pending and completed (the frontend sends no body)."""
+    task = _find_task(task_id)
+    task["status"] = "completed" if task["status"] == "pending" else "pending"
+    return task
+
+@app.delete("/api/tasks/{task_id}", status_code=204)
+def delete_task(task_id: str):
+    """Delete a task."""
+    tasks.remove(_find_task(task_id))
 
 if __name__ == "__main__":
     import uvicorn

@@ -352,6 +352,38 @@ export default {
     noTasks: 'タスクがありません。上記からタスクを追加してください！'
   },
 
+  // Purchase Order Modal
+  purchaseOrder: {
+    createPO: '発注書を作成',
+    viewPO: '発注書を表示',
+    createTitle: '発注書の作成',
+    viewTitle: '発注書',
+    sku: 'SKU',
+    orderId: '注文',
+    shortage: '不足数',
+    units: '個',
+    supplierName: '仕入先名',
+    quantity: '数量',
+    unitCost: '単価 (USD)',
+    totalCost: '合計金額',
+    expectedDelivery: '納品予定日',
+    status: 'ステータス',
+    createdDate: '作成日',
+    notes: '備考',
+    notesPlaceholder: '備考（任意）...',
+    noNotes: '備考なし',
+    submit: '発注書を作成',
+    submitting: '作成中...',
+    loadingPO: '発注書を読み込み中...',
+    loadError: '発注書の読み込みに失敗しました',
+    createError: '発注書の作成に失敗しました',
+    supplierRequired: '仕入先名は必須です',
+    quantityInvalid: '数量は1以上の整数で入力してください',
+    unitCostInvalid: '単価は0より大きい値で入力してください',
+    deliveryRequired: '納品予定日は必須です',
+    notAvailable: 'なし'
+  },
+
   // Language
   language: {
     english: 'English',
