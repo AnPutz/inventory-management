@@ -35,5 +35,11 @@ recent_transactions = load_json_file('transactions.json')
 # Load purchase orders
 purchase_orders = load_json_file('purchase_orders.json')
 
+# Restocking orders submitted through POST /api/restocking/orders.
+# In memory only: the list starts empty and is lost on every server restart.
+# main.py appends to this same list object, so callers must mutate it in place
+# (e.g. .append() / .clear()) rather than rebinding the name.
+submitted_orders = []
+
 # All data is now loaded from JSON files in the data/ directory
 # This allows for easier maintenance and updates of the sample data
