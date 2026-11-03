@@ -6,6 +6,7 @@ export default {
     orders: '注文',
     finance: '財務',
     demandForecast: '需要予測',
+    restocking: '補充発注',
     companyName: '触媒コンポーネンツ',
     subtitle: '在庫管理システム'
   },
@@ -106,6 +107,22 @@ export default {
     title: '注文',
     description: '顧客注文の表示と管理',
     allOrders: 'すべての注文',
+    submittedOrders: '発注済み補充注文',
+    submittedFiltersNote: 'フィルターは発注済みの補充注文には適用されません。',
+    submittedEmpty: '発注済みの補充注文はまだありません。',
+    submittedTable: {
+      orderNumber: '注文番号',
+      items: '品目',
+      totalValue: '合計金額',
+      submittedDate: '発注日',
+      leadTime: 'リードタイム（日）',
+      expectedDelivery: '予定納品日',
+      status: 'ステータス'
+    },
+    submittedStatus: {
+      submitted: '発注済み'
+    },
+    submittedMore: '他{count}件',
     totalOrders: '総注文数',
     totalRevenue: '総収益',
     avgOrderValue: '平均注文額',
@@ -209,6 +226,37 @@ export default {
     adequate: '適量'
   },
 
+  // Restocking
+  restocking: {
+    title: '補充発注',
+    description: '需要予測と予算に基づいて補充注文を計画します',
+    budget: '予算',
+    budgetHint: 'スライダーで予算を設定します。推奨内容は自動的に更新されます。',
+    selectedTotal: '選択合計',
+    remaining: '残り予算',
+    leadTime: '推定リードタイム',
+    days: '{count}日',
+    recommended: '推奨品目',
+    include: '含める',
+    sku: 'SKU',
+    itemName: '品目',
+    trend: 'トレンド',
+    unitCost: '単価',
+    quantity: '数量',
+    lineTotal: '小計',
+    leadTimeDays: 'リードタイム（日）',
+    placeOrder: '発注する',
+    placing: '発注中...',
+    overBudget: '選択した品目が予算を{amount}超過しています。数量を減らすか予算を増やしてください。',
+    nothingSelected: '数量が0より大きい品目を1つ以上選択してください。',
+    empty: '予測データがありません。',
+    success: '補充注文が正常に発注されました。',
+    successOrderNumber: '注文番号',
+    successExpected: '予定納品日',
+    viewOrders: '注文一覧を見る',
+    submitFailed: '発注に失敗しました: '
+  },
+
   // Trends
   trends: {
     increasing: '増加',
@@ -302,6 +350,39 @@ export default {
     dueDate: '期限',
     addTask: 'タスクを追加',
     noTasks: 'タスクがありません。上記からタスクを追加してください！'
+  },
+
+  // Purchase Order Modal
+  purchaseOrder: {
+    createPO: '発注書を作成',
+    viewPO: '発注書を表示',
+    createTitle: '発注書の作成',
+    viewTitle: '発注書',
+    sku: 'SKU',
+    orderId: '注文',
+    shortage: '不足数',
+    units: '個',
+    supplierName: '仕入先名',
+    quantity: '数量',
+    unitCost: '単価 (USD)',
+    totalCost: '合計金額',
+    expectedDelivery: '納品予定日',
+    status: 'ステータス',
+    createdDate: '作成日',
+    notes: '備考',
+    notesPlaceholder: '備考（任意）...',
+    noNotes: '備考なし',
+    submit: '発注書を作成',
+    submitting: '作成中...',
+    loadingPO: '発注書を読み込み中...',
+    loadError: '発注書の読み込みに失敗しました',
+    createError: '発注書の作成に失敗しました',
+    supplierRequired: '仕入先名は必須です',
+    quantityInvalid: '数量は1以上の整数で入力してください',
+    unitCostInvalid: '単価は0より大きい値で入力してください',
+    deliveryRequired: '納品予定日は必須です',
+    deliveryPast: '納品予定日に過去の日付は指定できません',
+    notAvailable: 'なし'
   },
 
   // Language

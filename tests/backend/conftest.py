@@ -12,6 +12,28 @@ server_path = Path(__file__).parent.parent.parent / "server"
 sys.path.insert(0, str(server_path))
 
 from main import app
+import mock_data
+
+
+@pytest.fixture(autouse=True)
+def reset_in_memory_state():
+    """Reset every list the API writes to around each test so state never leaks.
+
+    main.py holds references to the same list objects, so they must be cleared
+    and refilled in place; rebinding the mock_data names would not affect the API.
+    purchase_orders is restored to its loaded contents (not just cleared) in case
+    purchase_orders.json ever ships with seed data.
+    """
+    original_purchase_orders = list(mock_data.purchase_orders)
+
+    def reset():
+        mock_data.submitted_orders.clear()
+        mock_data.tasks.clear()
+        mock_data.purchase_orders[:] = original_purchase_orders
+
+    reset()
+    yield
+    reset()
 
 
 @pytest.fixture

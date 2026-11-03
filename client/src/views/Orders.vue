@@ -27,6 +27,46 @@
         </div>
       </div>
 
+      <!-- Submitted restocking orders: independent of the global filters -->
+      <div class="card submitted-card">
+        <div class="card-header">
+          <h3 class="card-title">{{ t('orders.submittedOrders') }} ({{ restockingOrders.length }})</h3>
+          <p class="filters-note">{{ t('orders.submittedFiltersNote') }}</p>
+        </div>
+        <div v-if="restockingOrders.length === 0" class="empty-state">{{ t('orders.submittedEmpty') }}</div>
+        <div v-else class="table-container">
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th class="col-order-number">{{ t('orders.submittedTable.orderNumber') }}</th>
+                <th class="col-submitted-items">{{ t('orders.submittedTable.items') }}</th>
+                <th class="col-value">{{ t('orders.submittedTable.totalValue') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.submittedDate') }}</th>
+                <th class="col-lead">{{ t('orders.submittedTable.leadTime') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.expectedDelivery') }}</th>
+                <th class="col-status">{{ t('orders.submittedTable.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockingOrders" :key="order.id">
+                <td class="col-order-number"><strong>{{ order.order_number }}</strong></td>
+                <td class="col-submitted-items">
+                  <div>{{ t('orders.itemsCount', { count: order.items.length }) }}</div>
+                  <div class="items-brief">{{ summarizeItems(order.items) }}</div>
+                </td>
+                <td class="col-value"><strong>{{ formatCurrencyWithDecimals(order.total_value, currentCurrency, 2) }}</strong></td>
+                <td class="col-date">{{ formatDate(order.submitted_date) }}</td>
+                <td class="col-lead">{{ order.lead_time_days }}</td>
+                <td class="col-date">{{ formatDate(order.expected_delivery) }}</td>
+                <td class="col-status">
+                  <span class="badge info">{{ t('orders.submittedStatus.submitted') }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">{{ t('orders.allOrders') }} ({{ orders.length }})</h3>
@@ -83,6 +123,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
+import { formatCurrencyWithDecimals } from '../utils/currency'
 
 export default {
   name: 'Orders',
@@ -95,6 +136,7 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    const restockingOrders = ref([])
 
     // Use shared filters
     const {
@@ -109,7 +151,13 @@ export default {
       try {
         loading.value = true
         const filters = getCurrentFilters()
-        const fetchedOrders = await api.getOrders(filters)
+        // Restocking orders are fetched without filters on purpose: they are not
+        // part of the filterable order dataset.
+        const [fetchedOrders, fetchedRestocking] = await Promise.all([
+          api.getOrders(filters),
+          api.getRestockingOrders()
+        ])
+        restockingOrders.value = fetchedRestocking
 
         // Sort orders by order_date (earliest first)
         orders.value = fetchedOrders.sort((a, b) => {
@@ -146,11 +194,21 @@ export default {
     const formatDate = (dateString) => {
       const { currentLocale } = useI18n()
       const locale = currentLocale.value === 'ja' ? 'ja-JP' : 'en-US'
-      return new Date(dateString).toLocaleDateString(locale, {
+      // Guard against missing/invalid dates so we never render "Invalid Date"
+      const date = new Date(dateString)
+      if (!dateString || isNaN(date.getTime())) return '-'
+      return date.toLocaleDateString(locale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       })
+    }
+
+    // Short summary for the items column: first two names plus a "+N more" hint
+    const summarizeItems = (items) => {
+      const names = items.slice(0, 2).map(i => translateProductName(i.name))
+      const rest = items.length - names.length
+      return rest > 0 ? `${names.join(', ')} ${t('orders.submittedMore', { count: rest })}` : names.join(', ')
     }
 
     onMounted(loadOrders)
@@ -160,6 +218,10 @@ export default {
       loading,
       error,
       orders,
+      restockingOrders,
+      currentCurrency,
+      formatCurrencyWithDecimals,
+      summarizeItems,
       getOrdersByStatus,
       getOrderStatusClass,
       formatDate,
@@ -201,6 +263,38 @@ export default {
 
 .col-value {
   width: 120px;
+}
+
+.col-lead {
+  width: 130px;
+}
+
+.col-submitted-items {
+  width: 240px;
+}
+
+.submitted-card {
+  margin-bottom: 1.5rem;
+}
+
+.filters-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.813rem;
+  color: #64748b;
+}
+
+.items-brief {
+  font-size: 0.813rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-state {
+  padding: 1.5rem;
+  color: #64748b;
+  text-align: center;
 }
 
 /* Items details styling */
