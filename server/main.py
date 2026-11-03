@@ -3,7 +3,7 @@ from itertools import count
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders, submitted_orders, tasks
 
 app = FastAPI(title="Factory Inventory Management System")
@@ -127,6 +127,25 @@ class CreatePurchaseOrderRequest(BaseModel):
     expected_delivery_date: date
     notes: Optional[str] = Field(default=None, max_length=2000)
 
+    # Validators (not checks in the endpoint) so every input error is a 422 with
+    # the same detail-list shape, which is what the frontend error display expects.
+    @field_validator("supplier_name")
+    @classmethod
+    def supplier_name_not_blank(cls, value: str) -> str:
+        # min_length=1 still accepts "   ", so strip and check again.
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("expected_delivery_date")
+    @classmethod
+    def delivery_date_not_in_past(cls, value: date) -> date:
+        # Today is allowed; anything earlier can't be a real expected delivery.
+        if value < date.today():
+            raise ValueError("must not be in the past")
+        return value
+
 class Task(BaseModel):
     id: str
     title: str
@@ -139,6 +158,15 @@ class CreateTaskRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     priority: Literal["high", "medium", "low"] = "medium"
     dueDate: date
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        # Same rule as supplier_name: whitespace-only is a 422 like any other bad input.
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
 
 class RestockItem(BaseModel):
     sku: str
@@ -411,6 +439,21 @@ def create_restocking_order(request: CreateRestockOrderRequest):
     submitted_orders.append(order)
     return order
 
+_po_ids = count(1)
+
+def _next_po_id() -> str:
+    """Return a PO id not used by any existing purchase order.
+
+    A counter (not len(purchase_orders)) so ids stay unique if POs are ever
+    deleted; skipping taken ids keeps it safe if purchase_orders.json ships with
+    seed data that already uses "PO-0001"-style ids.
+    """
+    taken = {po["id"] for po in purchase_orders}
+    while True:
+        candidate = f"PO-{next(_po_ids):04d}"
+        if candidate not in taken:
+            return candidate
+
 @app.post("/api/purchase-orders", response_model=PurchaseOrder, status_code=201)
 def create_purchase_order(request: CreatePurchaseOrderRequest):
     """Create a purchase order for a backlog (shortage) item. One PO per backlog item."""
@@ -422,17 +465,11 @@ def create_purchase_order(request: CreatePurchaseOrderRequest):
             detail=f"Backlog item {request.backlog_item_id} already has a purchase order",
         )
 
-    # min_length=1 still accepts "   ", so check the stripped value too.
-    supplier_name = request.supplier_name.strip()
-    if not supplier_name:
-        raise HTTPException(status_code=400, detail="Supplier name must not be blank")
-
-    # POs are never deleted, so the list length gives a unique, increasing sequence.
-    sequence = len(purchase_orders) + 1
     po = {
-        "id": f"PO-{sequence:04d}",
+        "id": _next_po_id(),
         "backlog_item_id": request.backlog_item_id,
-        "supplier_name": supplier_name,
+        # Already stripped and checked for blank by the request model.
+        "supplier_name": request.supplier_name,
         "quantity": request.quantity,
         "unit_cost": request.unit_cost,
         "expected_delivery_date": request.expected_delivery_date.isoformat(),
@@ -470,13 +507,10 @@ def get_tasks():
 @app.post("/api/tasks", response_model=Task, status_code=201)
 def create_task(request: CreateTaskRequest):
     """Create a task."""
-    # min_length=1 still accepts "   ", so check the stripped value too.
-    title = request.title.strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="Task title must not be blank")
     task = {
         "id": f"task-{next(_task_ids)}",
-        "title": title,
+        # Already stripped and checked for blank by the request model.
+        "title": request.title,
         "priority": request.priority,
         "dueDate": request.dueDate.isoformat(),
         "status": "pending",

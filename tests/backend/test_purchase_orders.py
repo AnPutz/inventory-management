@@ -1,7 +1,15 @@
 """
 Tests for purchase order API endpoints.
 """
+from datetime import date, timedelta
+
 import pytest
+
+import mock_data
+
+# Relative to today because the API rejects past delivery dates; a fixed date
+# would make these tests start failing once it passes.
+FUTURE_DATE = (date.today() + timedelta(days=30)).isoformat()
 
 
 def po_payload(backlog_item_id, **overrides):
@@ -11,7 +19,7 @@ def po_payload(backlog_item_id, **overrides):
         "supplier_name": "Acme Components",
         "quantity": 350,
         "unit_cost": 12.5,
-        "expected_delivery_date": "2026-12-01",
+        "expected_delivery_date": FUTURE_DATE,
         "notes": "Rush order",
     }
     payload.update(overrides)
@@ -40,7 +48,7 @@ class TestPurchaseOrderEndpoints:
         assert po["supplier_name"] == "Acme Components"
         assert po["quantity"] == 350
         assert abs(po["unit_cost"] - 12.5) < 0.01
-        assert po["expected_delivery_date"] == "2026-12-01"
+        assert po["expected_delivery_date"] == FUTURE_DATE
         assert po["status"] == "Pending"
         assert "T" in po["created_date"]
         assert po["notes"] == "Rush order"
@@ -92,6 +100,22 @@ class TestPurchaseOrderEndpoints:
         second = client.post("/api/purchase-orders", json=po_payload(backlog[1]["id"])).json()
         assert first["id"] != second["id"]
 
+    def test_purchase_order_id_skips_existing_ids(self, client):
+        """Test that new ids never collide with POs already in the data (e.g. seed data)."""
+        backlog = client.get("/api/backlog").json()
+        # Simulate seed data that already uses the first ids the counter would hand out.
+        # conftest restores purchase_orders after the test.
+        seeded = [
+            {**po_payload(backlog[0]["id"]), "id": f"PO-{n:04d}", "status": "Pending",
+             "created_date": "2026-01-01T00:00:00"}
+            for n in range(1, 6)
+        ]
+        mock_data.purchase_orders.extend(seeded)
+
+        response = client.post("/api/purchase-orders", json=po_payload(backlog[1]["id"]))
+        assert response.status_code == 201
+        assert response.json()["id"] not in {po["id"] for po in seeded}
+
     def test_duplicate_purchase_order_rejected(self, client, backlog_item_id):
         """Test that a backlog item can only have one PO."""
         assert client.post("/api/purchase-orders", json=po_payload(backlog_item_id)).status_code == 201
@@ -114,16 +138,25 @@ class TestPurchaseOrderEndpoints:
         ("supplier_name", ""),
         ("expected_delivery_date", "not-a-date"),
         ("expected_delivery_date", "2026-13-45"),
+        ("expected_delivery_date", (date.today() - timedelta(days=1)).isoformat()),
+        ("supplier_name", "   "),
+        ("supplier_name", "x" * 201),
+        ("notes", "x" * 2001),
     ])
     def test_create_purchase_order_invalid_fields(self, client, backlog_item_id, field, value):
-        """Test that invalid field values are rejected with 422."""
+        """Test that invalid field values are rejected with 422 and a detail list."""
         response = client.post("/api/purchase-orders", json=po_payload(backlog_item_id, **{field: value}))
         assert response.status_code == 422
+        # Every validation error has the same shape, so the UI can display them uniformly.
+        assert isinstance(response.json()["detail"], list)
 
-    def test_create_purchase_order_blank_supplier(self, client, backlog_item_id):
-        """Test that a whitespace-only supplier name is rejected."""
-        response = client.post("/api/purchase-orders", json=po_payload(backlog_item_id, supplier_name="   "))
-        assert response.status_code == 400
+    def test_create_purchase_order_delivery_today_allowed(self, client, backlog_item_id):
+        """Test that today is a valid expected delivery date."""
+        response = client.post(
+            "/api/purchase-orders",
+            json=po_payload(backlog_item_id, expected_delivery_date=date.today().isoformat()),
+        )
+        assert response.status_code == 201
 
     def test_supplier_name_is_trimmed(self, client, backlog_item_id):
         """Test that surrounding whitespace is removed from the supplier name."""

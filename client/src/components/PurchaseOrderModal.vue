@@ -71,7 +71,7 @@
                 <div class="form-grid">
                   <div class="form-group full">
                     <label for="po-supplier">{{ t('purchaseOrder.supplierName') }} *</label>
-                    <input id="po-supplier" v-model="form.supplier_name" type="text" :class="{ invalid: errors.supplier_name }" />
+                    <input id="po-supplier" v-model="form.supplier_name" type="text" maxlength="200" :class="{ invalid: errors.supplier_name }" />
                     <div v-if="errors.supplier_name" class="field-error">{{ errors.supplier_name }}</div>
                   </div>
 
@@ -89,13 +89,13 @@
 
                   <div class="form-group full">
                     <label for="po-delivery">{{ t('purchaseOrder.expectedDelivery') }} *</label>
-                    <input id="po-delivery" v-model="form.expected_delivery_date" type="date" :class="{ invalid: errors.expected_delivery_date }" />
+                    <input id="po-delivery" v-model="form.expected_delivery_date" type="date" :min="todayLocal()" :class="{ invalid: errors.expected_delivery_date }" />
                     <div v-if="errors.expected_delivery_date" class="field-error">{{ errors.expected_delivery_date }}</div>
                   </div>
 
                   <div class="form-group full">
                     <label for="po-notes">{{ t('purchaseOrder.notes') }}</label>
-                    <textarea id="po-notes" v-model="form.notes" rows="3" :placeholder="t('purchaseOrder.notesPlaceholder')"></textarea>
+                    <textarea id="po-notes" v-model="form.notes" rows="3" maxlength="2000" :placeholder="t('purchaseOrder.notesPlaceholder')"></textarea>
                   </div>
                 </div>
 
@@ -121,7 +121,17 @@ import { ref, reactive, computed, watch } from 'vue'
 import { api } from '../api'
 import { useI18n } from '../composables/useI18n'
 
-const { t, translateProductName } = useI18n()
+const { t, translateProductName, currentLocale } = useI18n()
+
+// Map app locale to a BCP 47 tag for Intl formatting
+const intlLocale = computed(() => (currentLocale.value === 'ja' ? 'ja-JP' : 'en-US'))
+
+// Today as YYYY-MM-DD in LOCAL time (toISOString would use UTC and can be off by a day)
+const todayLocal = () => {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
@@ -230,6 +240,9 @@ const validate = () => {
   // Date input yields YYYY-MM-DD, or '' when empty/incomplete
   if (!form.expected_delivery_date || isNaN(new Date(form.expected_delivery_date).getTime())) {
     errors.expected_delivery_date = t('purchaseOrder.deliveryRequired')
+  } else if (form.expected_delivery_date < todayLocal()) {
+    // Both are zero-padded YYYY-MM-DD, so string comparison is chronological
+    errors.expected_delivery_date = t('purchaseOrder.deliveryPast')
   }
   return Object.keys(errors).length === 0
 }
@@ -238,8 +251,10 @@ const submit = async () => {
   if (submitting.value || !validate()) return
   submitError.value = ''
   submitting.value = true
+  // Remember which item this request is for; the modal may be closed/reopened for another item mid-request
+  const requestedId = props.backlogItem.id
   const payload = {
-    backlog_item_id: props.backlogItem.id,
+    backlog_item_id: requestedId,
     supplier_name: form.supplier_name.trim(),
     quantity: Number(form.quantity),
     unit_cost: Number(form.unit_cost),
@@ -250,12 +265,17 @@ const submit = async () => {
 
   try {
     const po = await api.createPurchaseOrder(payload)
+    // Always emit on success so the parent can update the original row (it looks it up by backlog_item_id
+    // and only closes the modal if it is still showing that item)
     emit('po-created', po)
   } catch (err) {
     console.error('Failed to create purchase order:', err)
-    submitError.value = extractError(err, t('purchaseOrder.createError'))
+    // Don't leak a stale error into another item's form
+    if (props.backlogItem?.id === requestedId) {
+      submitError.value = extractError(err, t('purchaseOrder.createError'))
+    }
   } finally {
-    submitting.value = false
+    if (props.backlogItem?.id === requestedId) submitting.value = false
   }
 }
 
@@ -266,7 +286,7 @@ const close = () => {
 const formatMoney = (value) => {
   const n = Number(value)
   if (!Number.isFinite(n)) return t('purchaseOrder.notAvailable')
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return n.toLocaleString(intlLocale.value, { style: 'currency', currency: 'USD' })
 }
 
 const formatDate = (dateString) => {
@@ -275,7 +295,7 @@ const formatDate = (dateString) => {
   const normalized = /^\d{4}-\d{2}-\d{2}$/.test(dateString) ? `${dateString}T00:00:00` : dateString
   const date = new Date(normalized)
   if (isNaN(date.getTime())) return t('purchaseOrder.notAvailable')
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  return date.toLocaleDateString(intlLocale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 }
 </script>
 

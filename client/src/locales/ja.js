@@ -381,6 +381,7 @@ export default {
     quantityInvalid: '数量は1以上の整数で入力してください',
     unitCostInvalid: '単価は0より大きい値で入力してください',
     deliveryRequired: '納品予定日は必須です',
+    deliveryPast: '納品予定日に過去の日付は指定できません',
     notAvailable: 'なし'
   },
 

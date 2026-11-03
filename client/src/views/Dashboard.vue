@@ -671,7 +671,10 @@ export default {
         item.purchase_order_id = poData.id
         item.purchase_order = poData
       }
-      showPOModal.value = false
+      // A late response for a previous item must not close the modal now showing a different item
+      if (selectedBacklogForPO.value?.id === poData.backlog_item_id) {
+        showPOModal.value = false
+      }
     }
 
     // Watch for filter changes and reload data

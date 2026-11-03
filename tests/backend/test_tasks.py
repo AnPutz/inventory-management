@@ -94,13 +94,17 @@ class TestTaskEndpoints:
         {"priority": "urgent"},
         {"dueDate": "tomorrow"},
         {"dueDate": None},
+        {"title": "   "},
+        {"title": "x" * 201},
     ])
     def test_create_task_invalid(self, client, overrides):
-        """Test that invalid task data is rejected with 422."""
+        """Test that invalid task data is rejected with 422 and a detail list."""
         response = create_task(client, **overrides)
         assert response.status_code == 422
+        assert isinstance(response.json()["detail"], list)
 
-    def test_create_task_blank_title(self, client):
-        """Test that a whitespace-only title is rejected."""
-        response = create_task(client, title="   ")
-        assert response.status_code == 400
+    def test_task_title_is_trimmed(self, client):
+        """Test that surrounding whitespace is removed from the title."""
+        response = create_task(client, title="  Call supplier  ")
+        assert response.status_code == 201
+        assert response.json()["title"] == "Call supplier"

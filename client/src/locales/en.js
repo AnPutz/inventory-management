@@ -381,6 +381,7 @@ export default {
     quantityInvalid: 'Quantity must be a whole number greater than 0',
     unitCostInvalid: 'Unit cost must be greater than 0',
     deliveryRequired: 'Expected delivery date is required',
+    deliveryPast: 'Expected delivery date cannot be in the past',
     notAvailable: 'N/A'
   },
 
